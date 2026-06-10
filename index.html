@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墨守 — 国风写意塔防</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- 左侧游戏画布和覆盖面板 -->
+    <div id="canvas-container">
+      <!-- 关卡选择界面 -->
+      <div id="level-select-screen" class="overlay-screen">
+        <h1 class="overlay-title start">墨 守</h1>
+        <p class="overlay-desc">择一雄关，定攻守之势</p>
+        <div id="level-cards" class="level-cards">
+          <!-- JS 动态生成 -->
+        </div>
+      </div>
+
+      <!-- 失败界面 -->
+      <div id="defeat-screen" class="overlay-screen hidden">
+        <h1 class="overlay-title defeat">城 破</h1>
+        <p id="defeat-msg" class="overlay-desc">防线失守，敌军已破城而入。<br>请重整旗鼓，再战江山！</p>
+        <div class="overlay-buttons">
+          <button id="retry-defeat-btn" class="start-btn">重建防线</button>
+          <button id="back-defeat-btn" class="secondary-btn">返回关卡</button>
+        </div>
+      </div>
+
+      <!-- 胜利界面 -->
+      <div id="victory-screen" class="overlay-screen hidden">
+        <h1 class="overlay-title victory">大 捷</h1>
+        <p id="victory-msg" class="overlay-desc">成功坚守关隘！<br>运筹帷幄之中，决胜千里之外。</p>
+        <div class="overlay-buttons">
+          <button id="retry-victory-btn" class="start-btn">再启征程</button>
+          <button id="back-victory-btn" class="secondary-btn">返回关卡</button>
+        </div>
+      </div>
+
+      <!-- UI 组件库 -->
+      <div id="ui-catalog-screen" class="overlay-screen catalog-screen hidden">
+        <div class="catalog-shell">
+          <header class="catalog-header">
+            <div>
+              <h2>墨守 UI 图鉴</h2>
+              <p>攻城职业、防守武器、地形与生存建造资源</p>
+            </div>
+            <button id="ui-catalog-close" class="secondary-btn">关闭</button>
+          </header>
+          <div id="ui-catalog-content" class="catalog-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧 HUD 界面 -->
+    <div id="hud-sidebar">
+      <!-- 头部标题与控制按钮 -->
+      <div class="sidebar-header">
+        <h2 class="game-title">墨守</h2>
+        <p id="hud-mode-label" class="game-subtitle">守城 · 雁门关</p>
+        <div class="top-controls">
+          <button id="speed-btn" class="control-btn">速度: 1x</button>
+          <button id="sound-btn" class="control-btn">音效: 开</button>
+          <button id="back-to-level-btn" class="control-btn" title="返回关卡选择">↩ 关卡</button>
+          <button id="ui-catalog-btn" class="control-btn" title="打开UI组件库">图鉴</button>
+          <button id="material-mgr-btn" class="control-btn" title="打开物料管理">📦 物料</button>
+          <button id="save-game-btn" class="control-btn" title="保存游戏">💾 保存</button>
+          <button id="load-game-btn" class="control-btn" title="读取存档">📂 读档</button>
+          <span class="control-hint" title="右键/中键拖拽平移 · 滚轮缩放">🖱️ 拖拽</span>
+        </div>
+      </div>
+
+      <!-- 资源栏 -->
+      <div class="player-stats">
+        <div class="stat-item">
+          <span class="stat-icon">💰</span>
+          <span id="gold-val" class="stat-value-gold">0</span>
+        </div>
+        <div id="hp-stat-item" class="stat-item">
+          <span class="stat-icon">🏯</span>
+          <span id="hp-val" class="stat-value-hp">0</span>
+        </div>
+        <div id="supply-stat-item" class="stat-item hidden">
+          <span class="stat-icon">⚔️</span>
+          <span id="supply-val" class="stat-value-supply">0</span>
+        </div>
+        <div class="wave-info">
+          <div class="wave-label">
+            <span id="wave-label-text">准备御敌...</span>
+            <span id="wave-count">0/10</span>
+          </div>
+          <div class="wave-progress-container">
+            <div id="wave-progress" class="wave-progress-bar"></div>
+          </div>
+          <div id="next-wave-preview" class="next-wave-preview">下一波: 侦察中</div>
+          <button id="rush-wave-btn" class="rush-wave-btn">提前迎敌</button>
+        </div>
+      </div>
+
+      <!-- 防御塔商店 (守城模式) -->
+      <div id="tower-shop-section" class="tower-shop">
+        <h3 class="shop-title">兵器谱</h3>
+        <div class="shop-item" data-type="arrow">
+          <div class="tower-icon">🏹</div>
+          <div class="tower-details">
+            <span class="tower-name">箭塔</span>
+            <span class="tower-cost">💰 50</span>
+            <span class="tower-desc">射速极快，克制移速单位</span>
+          </div>
+        </div>
+        <div class="shop-item" data-type="cannon">
+          <div class="tower-icon">💣</div>
+          <div class="tower-details">
+            <span class="tower-name">炮台</span>
+            <span class="tower-cost">💰 100</span>
+            <span class="tower-desc">威力极大，附带群体伤害</span>
+          </div>
+        </div>
+        <div class="shop-item" data-type="ice">
+          <div class="tower-icon">❄️</div>
+          <div class="tower-details">
+            <span class="tower-name">冰塔</span>
+            <span class="tower-cost">💰 75</span>
+            <span class="tower-desc">降低敌军移速，提供强力控制</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 攻城兵力配置面板 (攻城模式) -->
+      <div id="troop-config-section" class="troop-config hidden">
+        <h3 class="shop-title">编队配置</h3>
+        <div id="supply-info" class="supply-info">
+          <span>可用兵力: </span>
+          <span id="supply-remaining" class="supply-remaining">200</span>
+        </div>
+        <div class="troop-slots" id="troop-slots">
+          <!-- JS 动态生成 -->
+        </div>
+        <button id="send-wave-btn" class="start-btn send-wave-btn">发 兵</button>
+      </div>
+
+      <!-- 防御塔升级/售卖控制台 -->
+      <div id="selected-tower-panel" class="selected-tower-panel" style="display: none;">
+        <h3 id="panel-tower-title" class="panel-title">箭塔 Lv.1</h3>
+        <div class="tower-stats">
+          <span id="panel-stat-atk">伤害: 15</span>
+          <span id="panel-stat-range">范围: 120</span>
+        </div>
+        <div class="action-buttons">
+          <button id="upgrade-btn" class="action-btn btn-upgrade">升级</button>
+          <button id="sell-btn" class="action-btn btn-sell">拆除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
