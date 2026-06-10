@@ -53,7 +53,7 @@ async function main() {
     if (fs.existsSync(distPath)) {
       await app.register(fastifyStatic, {
         root: distPath,
-        index: false,
+        index: 'index.html',
       });
 
       // 单纯为 SPA 回退
