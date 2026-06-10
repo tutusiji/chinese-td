@@ -4,11 +4,15 @@
 import { FastifyInstance } from 'fastify';
 import { sqlite } from '../db';
 
-// API Keys (从环境变量读取)
-const HUNYUAN_KEY = process.env.HUNYUAN_API_KEY || 'sk-iGhtF2OWBhhDG4YM5HoJRMzude75JQFjOWHkJlvErvpaGFH9';
-const TOKENHUB_KEY = process.env.TOKENHUB_API_KEY || 'sk-F9AGW2A4HtiOSRE8jZONxXeBtKP7fv1lpnuKfs84dXDYJlNW';
-
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
+
+function getRequiredEnv(name: string) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`服务端缺少环境变量 ${name}`);
+  }
+  return value;
+}
 
 export function jobRoutes(app: FastifyInstance) {
   // 提交 3D 生成任务
@@ -59,9 +63,10 @@ export function jobRoutes(app: FastifyInstance) {
 // ── 内部 ─────────────────────────────────────────────────
 
 async function submitHunyuan(prompt: string): Promise<string | null> {
+  const hunyuanKey = getRequiredEnv('HUNYUAN_API_KEY');
   const r = await fetch('https://api.ai3d.cloud.tencent.com/v1/ai3d/submit', {
     method: 'POST',
-    headers: { 'Authorization': HUNYUAN_KEY, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': hunyuanKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ Prompt: prompt, Model: '3.1' }),
   });
   if (!r.ok) return null;
@@ -70,9 +75,10 @@ async function submitHunyuan(prompt: string): Promise<string | null> {
 }
 
 async function submitTokenhub(prompt: string): Promise<string | null> {
+  const tokenhubKey = getRequiredEnv('TOKENHUB_API_KEY');
   const r = await fetch('https://tokenhub.tencentmaas.com/v1/api/3d/submit', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${TOKENHUB_KEY}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${tokenhubKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: 'hy-3d-3.0', prompt }),
   });
   if (!r.ok) return null;
@@ -88,9 +94,12 @@ function startPolling() {
 
     for (const job of rows) {
       try {
+        const key = job.backend === 'tokenhub'
+          ? `Bearer ${getRequiredEnv('TOKENHUB_API_KEY')}`
+          : getRequiredEnv('HUNYUAN_API_KEY');
         const url = job.backend === 'tokenhub'
-          ? { q: 'https://tokenhub.tencentmaas.com/v1/api/3d/query', b: { model: 'hy-3d-3.0', id: job.job_id }, key: `Bearer ${TOKENHUB_KEY}` }
-          : { q: 'https://api.ai3d.cloud.tencent.com/v1/ai3d/query', b: { JobId: job.job_id }, key: HUNYUAN_KEY };
+          ? { q: 'https://tokenhub.tencentmaas.com/v1/api/3d/query', b: { model: 'hy-3d-3.0', id: job.job_id }, key }
+          : { q: 'https://api.ai3d.cloud.tencent.com/v1/ai3d/query', b: { JobId: job.job_id }, key };
 
         const r = await fetch(url.q, {
           method: 'POST',

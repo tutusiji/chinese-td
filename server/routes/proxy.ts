@@ -4,8 +4,13 @@
  */
 import { FastifyInstance } from 'fastify';
 
-const DRAW_KEY = process.env.DRAW_API_KEY || 'sk-228da4abae694bcaa2b683e1ef07374e';
-const HUNYUAN_KEY = process.env.HUNYUAN_API_KEY || 'sk-iGhtF2OWBhhDG4YM5HoJRMzude75JQFjOWHkJlvErvpaGFH9';
+function getRequiredEnv(name: string) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`服务端缺少环境变量 ${name}`);
+  }
+  return value;
+}
 
 export function proxyRoutes(app: FastifyInstance) {
   // 2D 图像生成 — images/generations
@@ -14,15 +19,17 @@ export function proxyRoutes(app: FastifyInstance) {
     if (!prompt) return reply.status(400).send({ error: '缺少 prompt' });
 
     try {
+      const drawKey = getRequiredEnv('DRAW_API_KEY');
       const r = await fetch('https://www.right.codes/draw/v1/images/generations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${DRAW_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${drawKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, prompt, n: 1, size: '1024x1024', response_format: 'b64_json' }),
       });
       const data = await r.json() as any;
       return reply.send(data);
     } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+      const status = err.message?.includes('环境变量') ? 503 : 500;
+      return reply.status(status).send({ error: err.message });
     }
   });
 
@@ -32,15 +39,17 @@ export function proxyRoutes(app: FastifyInstance) {
     if (!prompt) return reply.status(400).send({ error: '缺少 prompt' });
 
     try {
+      const drawKey = getRequiredEnv('DRAW_API_KEY');
       const r = await fetch('https://www.right.codes/draw/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${DRAW_KEY}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${drawKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 4096 }),
       });
       const data = await r.json() as any;
       return reply.send(data);
     } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+      const status = err.message?.includes('环境变量') ? 503 : 500;
+      return reply.status(status).send({ error: err.message });
     }
   });
 
@@ -50,15 +59,17 @@ export function proxyRoutes(app: FastifyInstance) {
     if (!prompt) return reply.status(400).send({ error: '缺少 prompt' });
 
     try {
+      const hunyuanKey = getRequiredEnv('HUNYUAN_API_KEY');
       const r = await fetch('https://api.ai3d.cloud.tencent.com/v1/ai3d/submit', {
         method: 'POST',
-        headers: { 'Authorization': HUNYUAN_KEY, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': hunyuanKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ Prompt: prompt, Model: '3.1' }),
       });
       const data = await r.json() as any;
       return reply.send(data);
     } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+      const status = err.message?.includes('环境变量') ? 503 : 500;
+      return reply.status(status).send({ error: err.message });
     }
   });
 
@@ -67,15 +78,17 @@ export function proxyRoutes(app: FastifyInstance) {
     if (!jobId) return reply.status(400).send({ error: '缺少 jobId' });
 
     try {
+      const hunyuanKey = getRequiredEnv('HUNYUAN_API_KEY');
       const r = await fetch('https://api.ai3d.cloud.tencent.com/v1/ai3d/query', {
         method: 'POST',
-        headers: { 'Authorization': HUNYUAN_KEY, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': hunyuanKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ JobId: jobId }),
       });
       const data = await r.json() as any;
       return reply.send(data);
     } catch (err: any) {
-      return reply.status(500).send({ error: err.message });
+      const status = err.message?.includes('环境变量') ? 503 : 500;
+      return reply.status(status).send({ error: err.message });
     }
   });
 }

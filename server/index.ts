@@ -7,6 +7,7 @@
  *  - AI API 代理 (2D/3D)
  *  - 生产环境静态文件服务
  */
+import 'dotenv/config';
 import Fastify from 'fastify';
 import path from 'path';
 import { fileURLToPath } from 'url';
