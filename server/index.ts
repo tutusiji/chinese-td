@@ -9,6 +9,7 @@
  */
 import 'dotenv/config';
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initSchema } from './db';
@@ -50,6 +51,11 @@ async function main() {
   try {
     const fs = await import('node:fs');
     if (fs.existsSync(distPath)) {
+      await app.register(fastifyStatic, {
+        root: distPath,
+        index: false,
+      });
+
       // 单纯为 SPA 回退
       app.get('/*', async (_req, reply) => {
         const indexPath = path.join(distPath, 'index.html');
