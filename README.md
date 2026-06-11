@@ -38,6 +38,7 @@ cp .env.example .env
 
 ```bash
 PORT=3001
+HOST=0.0.0.0
 DRAW_API_KEY=replace-with-draw-api-key
 HUNYUAN_API_KEY=replace-with-hunyuan-api-key
 TOKENHUB_API_KEY=replace-with-tokenhub-api-key
@@ -68,6 +69,7 @@ npm start
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `PORT` | 否 | 服务端监听端口，默认 `3001` |
+| `HOST` | 否 | 服务端监听地址，默认 `0.0.0.0`；反向代理部署建议使用 `127.0.0.1` |
 | `DRAW_API_KEY` | 使用 2D 生成时必填 | 2D 图像生成服务 key |
 | `HUNYUAN_API_KEY` | 使用混元 3D 时必填 | 腾讯混元 3D 直连接口 key |
 | `TOKENHUB_API_KEY` | 使用 TokenHub 3D 时必填 | TokenHub 兼容接口 key |
@@ -80,7 +82,9 @@ npm start
 
 - 服务器: `huoshan`
 - 目录: `/opt/chinese-td`
-- 端口: `7501`
+- 访问地址: `https://joox.cc:7501`
+- nginx 公网端口: `7501`
+- Node 本地端口: `17501`
 - 进程名: `chinese-td`
 
 部署命令:
@@ -93,15 +97,27 @@ git reset --hard origin/main
 npm ci
 npm run build
 pm2 delete chinese-td || true
-PORT=7501 pm2 start npm --name chinese-td -- start
+pm2 start npm --name chinese-td -- start
 pm2 save
+```
+
+生产 `.env` 应包含:
+
+```bash
+PORT=17501
+HOST=127.0.0.1
+DRAW_API_KEY=...
+HUNYUAN_API_KEY=...
+TOKENHUB_API_KEY=...
 ```
 
 检查:
 
 ```bash
 pm2 status chinese-td
-curl http://127.0.0.1:7501/api/health
+curl http://127.0.0.1:17501/api/health
+curl -I https://joox.cc:7501/
+curl -I http://joox.cc:7501/
 ```
 
 ## 文档

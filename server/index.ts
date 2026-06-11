@@ -22,6 +22,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = parseInt(process.env.PORT || '3001');
+const HOST = process.env.HOST || '0.0.0.0';
 
 async function main() {
   // 初始化数据库
@@ -70,8 +71,8 @@ async function main() {
     console.log('[Server] 开发模式 (Vite 托管前端)');
   }
 
-  await app.listen({ port: PORT, host: '0.0.0.0' });
-  console.log(`[Server] 墨守服务端运行在 http://localhost:${PORT}`);
+  await app.listen({ port: PORT, host: HOST });
+  console.log(`[Server] 墨守服务端运行在 http://${HOST}:${PORT}`);
 }
 
 main().catch(err => {
