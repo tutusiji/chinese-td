@@ -30,20 +30,19 @@ export class MaterialManager {
   private activeCategory: MaterialCategory = 'enemy';
   private previews = new Map<string, MiniPreview>();
   private modal: HTMLDivElement | null = null;
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  /** 每个物料独立的轮询定时器 */
+  private cardPollers = new Map<string, ReturnType<typeof setInterval>>();
 
   open() {
     if (this.modal) { this.modal.classList.remove('hidden'); this.renderContent(); return; }
     this.createModal();
     this.renderContent();
-    // 定期刷新 (检查后台任务状态)
-    this.refreshTimer = setInterval(() => this.renderContent(), 6000);
   }
 
   close() {
     this.modal?.classList.add('hidden');
     this.disposeAllPreviews();
-    if (this.refreshTimer) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
+    this.stopAllCardPollers();
   }
 
   // ── 弹窗 ──────────────────────────────────────────────
@@ -90,22 +89,8 @@ export class MaterialManager {
       nav.appendChild(tab);
     }
 
-    // 活跃任务
-    try {
-      const activeJobs = await fetch(`${API}/jobs/active`).then(r => r.json());
-      if (activeJobs.length > 0) {
-        const sec = document.createElement('div');
-        sec.className = 'mm-jobs-section';
-        sec.innerHTML = `<h4>⏳ 生成中 (${activeJobs.length})</h4>`;
-        for (const j of activeJobs) {
-          const item = document.createElement('div');
-          item.className = 'mm-job-item';
-          item.textContent = `${j.materialId} — ${j.status}`;
-          sec.appendChild(item);
-        }
-        nav.appendChild(sec);
-      }
-    } catch {}
+    // 活跃任务导航
+    await this.updateNavJobCount();
 
     const content = this.modal.querySelector('#mm-content')!;
     content.innerHTML = '';
@@ -146,14 +131,18 @@ export class MaterialManager {
         <div class="mm-card-status" id="status-${entry.id}"></div>
       </div>`;
 
-    // 检查任务状态
+    // 任务状态 — 如果有活跃任务，启动独立轮询
     try {
       const activeJobs = await fetch(`${API}/jobs/active`).then(r => r.json());
       const active = activeJobs.find((j: any) => j.materialId === entry.id);
-      if (active) card.querySelector('.mm-card-status')!.textContent = `⏳ 生成中 (${active.status})...`;
-      const completed = await fetch(`${API}/jobs/completed?materialId=${entry.id}`).then(r => r.json());
-      if (completed && completed.status === 'completed' && entry.source === 'ai-3d') {
-        card.querySelector('.mm-card-status')!.textContent = '✅ 3D模型已就绪';
+      if (active) {
+        card.querySelector('.mm-card-status')!.textContent = `⏳ 生成中... (${active.status})`;
+        this.startCardPoll(entry.id);
+      } else {
+        const completed = await fetch(`${API}/jobs/completed?materialId=${entry.id}`).then(r => r.json());
+        if (completed && completed.status === 'completed' && entry.source === 'ai-3d') {
+          card.querySelector('.mm-card-status')!.textContent = '✅ 3D模型已就绪';
+        }
       }
     } catch {}
 
@@ -285,13 +274,13 @@ export class MaterialManager {
         }).then(r => r.json());
         if (res.success) {
           if (statusEl) statusEl.textContent = `✅ 已提交 (${(res.jobId || '').slice(-8)})，后台生成中...`;
+          this.startCardPoll(id);
         } else {
           if (statusEl) statusEl.textContent = `❌ ${res.error || '提交失败'}`;
         }
       } catch (err: any) {
         if (statusEl) statusEl.textContent = `❌ ${err.message}`;
       }
-      this.renderContent();
     } else {
       if (statusEl) statusEl.textContent = '🎨 生成2D中...';
       try {
@@ -334,6 +323,85 @@ export class MaterialManager {
     if (!confirm(`删除 "${entry.name}"？`)) return;
     await fetch(`${API}/materials/${id}`, { method: 'DELETE' });
     this.renderContent();
+  }
+
+  /** 为单个卡片启动轮询 — 只关心这一个物料的任务状态 */
+  private startCardPoll(materialId: string) {
+    if (this.cardPollers.has(materialId)) return; // 已在该物料轮询
+
+    const statusEl = document.getElementById(`status-${materialId}`);
+
+    const timer = setInterval(async () => {
+      // 弹窗已关闭 → 停止
+      if (this.modal?.classList.contains('hidden')) {
+        this.stopCardPoll(materialId);
+        return;
+      }
+
+      try {
+        const completed: any = await fetch(`${API}/jobs/completed?materialId=${materialId}`).then(r => r.json());
+        if (completed && completed.status === 'completed') {
+          // 任务完成 → 替换这一张卡片
+          if (statusEl) statusEl.textContent = '✅ 3D模型已就绪';
+          this.stopCardPoll(materialId);
+          const content = this.modal?.querySelector('#mm-content');
+          const previewEl = document.getElementById(`preview-${materialId}`);
+          const oldCard = previewEl?.parentElement;
+          if (oldCard && content) {
+            try {
+              const entry = await fetch(`${API}/materials/${materialId}`).then(r => r.json());
+              const newCard = await this.createCard(entry);
+              content.replaceChild(newCard, oldCard);
+            } catch {}
+          }
+        } else if (completed && completed.status === 'failed') {
+          if (statusEl) statusEl.textContent = `❌ ${completed.error || '生成失败'}`;
+          this.stopCardPoll(materialId);
+        } else {
+          // 还在处理中 → 更新状态文字
+          if (statusEl) statusEl.textContent = '⏳ 生成中...';
+          // 也更新导航栏中的计数
+          this.updateNavJobCount();
+        }
+      } catch {
+        // 服务端暂时不可用，静默等待
+      }
+    }, 5000);
+
+    this.cardPollers.set(materialId, timer);
+  }
+
+  private stopCardPoll(materialId: string) {
+    const timer = this.cardPollers.get(materialId);
+    if (timer) { clearInterval(timer); this.cardPollers.delete(materialId); }
+  }
+
+  private stopAllCardPollers() {
+    for (const [, timer] of this.cardPollers) clearInterval(timer);
+    this.cardPollers.clear();
+  }
+
+  /** 更新导航栏任务计数 (轻量 DOM) */
+  private async updateNavJobCount() {
+    const nav = this.modal?.querySelector('#mm-nav');
+    if (!nav) return;
+    try {
+      const activeJobs: any[] = await fetch(`${API}/jobs/active`).then(r => r.json());
+      const existing = nav.querySelector('.mm-jobs-section');
+      if (existing) existing.remove();
+      if (activeJobs.length > 0) {
+        const sec = document.createElement('div');
+        sec.className = 'mm-jobs-section';
+        sec.innerHTML = `<h4>⏳ 生成中 (${activeJobs.length})</h4>`;
+        for (const j of activeJobs) {
+          const item = document.createElement('div');
+          item.className = 'mm-job-item';
+          item.textContent = `${j.materialId} — ${j.status}`;
+          sec.appendChild(item);
+        }
+        nav.appendChild(sec);
+      }
+    } catch {}
   }
 
   private disposeAllPreviews() {
